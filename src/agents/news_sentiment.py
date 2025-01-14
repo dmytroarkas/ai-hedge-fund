@@ -64,7 +64,7 @@ def news_sentiment_agent(state: AgentState):
     }
 
 
-def fetch_news(ticker: str, end_date: str, limit: int = 10):
+def fetch_news(ticker: str, end_date: str, limit: int = 100):
     """Fetch news articles related to the ticker using GNews API."""
     # Преобразуем end_date в объект datetime
     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
