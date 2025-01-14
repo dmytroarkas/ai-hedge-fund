@@ -2,13 +2,13 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 from colorama import Fore, Back, Style, init
-import questionary
 
 from agents.fundamentals import fundamentals_agent
 from agents.portfolio_manager import portfolio_management_agent
 from agents.technicals import technical_analyst_agent
 from agents.risk_manager import risk_management_agent
 from agents.sentiment import sentiment_agent
+from agents.news_sentiment import news_sentiment_agent  # Импорт нового агента
 from graph.state import AgentState
 from agents.valuation import valuation_agent
 from utils.display import print_trading_output
@@ -17,7 +17,6 @@ from utils.analysts import ANALYST_ORDER
 import argparse
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from tabulate import tabulate
 
 # Load environment variables from .env file
 load_dotenv()
@@ -85,7 +84,13 @@ def create_workflow(selected_analysts=None):
 
     # Default to all analysts if none selected
     if selected_analysts is None:
-        selected_analysts = ["technical_analyst", "fundamentals_analyst", "sentiment_analyst", "valuation_analyst"]
+        selected_analysts = [
+            "technical_analyst", 
+            "fundamentals_analyst", 
+            "sentiment_analyst", 
+            "valuation_analyst",
+            "news_sentiment_agent",  # Добавлен новый агент по умолчанию
+        ]
 
     # Dictionary of all available analysts
     analyst_nodes = {
@@ -93,6 +98,7 @@ def create_workflow(selected_analysts=None):
         "fundamentals_analyst": ("fundamentals_agent", fundamentals_agent),
         "sentiment_analyst": ("sentiment_agent", sentiment_agent),
         "valuation_analyst": ("valuation_agent", valuation_agent),
+        "news_sentiment_agent": ("news_sentiment_agent", news_sentiment_agent),  # Новый агент
     }
 
     # Add selected analyst nodes
@@ -117,6 +123,35 @@ def create_workflow(selected_analysts=None):
     return workflow
 
 
+def select_analysts():
+    """Function for selecting analysts via text input."""
+    print("Select analysts (enter numbers separated by commas):")
+    print("1. Technical Analyst")
+    print("2. Fundamentals Analyst")
+    print("3. Sentiment Analyst")
+    print("4. Valuation Analyst")
+    print("5. News Sentiment Analyst")  # Новый пункт
+    choices = input("Input: ").strip().split(",")
+    choices = [int(choice.strip()) for choice in choices if choice.strip().isdigit()]
+    
+    # Convert numbers to analyst keys
+    analyst_keys = [
+        "technical_analyst", 
+        "fundamentals_analyst", 
+        "sentiment_analyst", 
+        "valuation_analyst",
+        "news_sentiment_agent",  # Новый ключ
+    ]
+    selected_analysts = [analyst_keys[choice - 1] for choice in choices if 1 <= choice <= 5]
+    
+    if not selected_analysts:
+        print("No analysts selected. Using all analysts by default.")
+        return None
+    else:
+        print(f"\nSelected analysts: {', '.join(selected_analysts)}")
+        return selected_analysts
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the hedge fund trading system")
     parser.add_argument("--ticker", type=str, required=True, help="Stock ticker symbol")
@@ -134,30 +169,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    selected_analysts = None
-    choices = questionary.checkbox(
-        "Select your AI analysts.",
-        choices=[
-            questionary.Choice(display, value=value) for display, value in ANALYST_ORDER
-        ],
-        instruction="\n\nInstructions: \n1. Press Space to select/unselect analysts.\n2. Press 'a' to select/unselect all.\n3. Press Enter when done to run the hedge fund.\n",
-        validate=lambda x: len(x) > 0 or "You must select at least one analyst.",
-        style=questionary.Style([
-            ('checkbox-selected', 'fg:green'),
-            ('selected', 'fg:green noinherit'),
-            ('highlighted', 'noinherit'),
-            ('pointer', 'noinherit'),
-        ])
-    ).ask()
+    # Select analysts
+    selected_analysts = select_analysts()
 
-    if not choices:
-        print("You must select at least one analyst. Using all analysts by default.")
-        selected_analysts = None
-    else:
-        selected_analysts = choices
-        print(f"\nSelected analysts: {', '.join(Fore.GREEN + choice.title().replace('_', ' ') + Style.RESET_ALL for choice in choices)}")
-
-    # Create the workflow with selected analysts
+    # Create the workflow
     workflow = create_workflow(selected_analysts)
     app = workflow.compile()
 
