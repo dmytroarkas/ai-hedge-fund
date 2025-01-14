@@ -3,6 +3,7 @@ from textblob import TextBlob
 from langchain_core.messages import HumanMessage
 from graph.state import AgentState, show_agent_reasoning
 import json
+from datetime import datetime
 
 # Константы для API GNews
 GNEWS_API_KEY = '6e9b533fb8e5c435201c7eda22d809ee'
@@ -17,6 +18,13 @@ def news_sentiment_agent(state: AgentState):
 
     # Получаем новости через API GNews
     news_articles = fetch_news(ticker, end_date)
+
+    # Логируем список новостей
+    print("\n=== Полученные новости ===")
+    for article in news_articles:
+        title = article.get("title", "No title")
+        published_at = article.get("publishedAt", "No date")
+        print(f"Дата: {published_at}, Заголовок: {title}")
 
     # Анализируем тональность новостей
     sentiment_scores = analyze_sentiment(news_articles)
