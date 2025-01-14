@@ -3,7 +3,7 @@ from textblob import TextBlob
 from langchain_core.messages import HumanMessage
 from graph.state import AgentState, show_agent_reasoning
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Константы для API GNews
 GNEWS_API_KEY = '6e9b533fb8e5c435201c7eda22d809ee'
@@ -66,13 +66,24 @@ def news_sentiment_agent(state: AgentState):
 
 def fetch_news(ticker: str, end_date: str, limit: int = 10):
     """Fetch news articles related to the ticker using GNews API."""
+    # Преобразуем end_date в объект datetime
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    # Вычисляем start_date (3 месяца назад)
+    start_date_obj = end_date_obj - timedelta(days=90)  # 90 дней = ~3 месяца
+    start_date = start_date_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_date_formatted = end_date_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     params = {
         "q": ticker,  # Поиск по тикеру
         "lang": "en",  # Язык новостей (английский)
         "max": limit,  # Максимальное количество новостей
         "sortby": "publishedAt",  # Сортировка по дате публикации
+        "from": start_date,  # Начальная дата
+        "to": end_date_formatted,  # Конечная дата
         "apikey": GNEWS_API_KEY,  # API ключ
     }
+    
     response = requests.get(GNEWS_API_URL, params=params)
     if response.status_code == 200:
         return response.json().get("articles", [])
