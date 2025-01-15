@@ -1,12 +1,7 @@
 import json
-from langchain_core.messages import HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai.chat_models import ChatOpenAI
-
-from graph.state import AgentState, show_agent_reasoning
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
-
+from graph.state import AgentState, show_agent_reasoning
 
 class PortfolioManagerOutput(BaseModel):
     action: Literal["buy", "sell", "hold"]
@@ -14,83 +9,67 @@ class PortfolioManagerOutput(BaseModel):
     confidence: float = Field(description="Confidence in the decision, between 0.0 and 100.0")
     reasoning: str = Field(description="Reasoning for the decision")
 
+def make_trading_decision(technical_signal, fundamentals_signal, sentiment_signal, valuation_signal, news_sentiment_signal, max_position_size, portfolio_cash, portfolio_stock):
+    # Simple decision-making logic based on majority signals
+    signals = {
+        "buy": 0,
+        "sell": 0,
+        "hold": 0
+    }
 
-##### Portfolio Management Agent #####
+    # Count the signals
+    if technical_signal.lower() in ["buy", "sell", "hold"]:
+        signals[technical_signal.lower()] += 1
+    if fundamentals_signal.lower() in ["buy", "sell", "hold"]:
+        signals[fundamentals_signal.lower()] += 1
+    if sentiment_signal.lower() in ["buy", "sell", "hold"]:
+        signals[sentiment_signal.lower()] += 1
+    if valuation_signal.lower() in ["buy", "sell", "hold"]:
+        signals[valuation_signal.lower()] += 1
+    if news_sentiment_signal.lower() in ["buy", "sell", "hold"]:
+        signals[news_sentiment_signal.lower()] += 1
+
+    # Determine the action based on the majority of signals
+    action = max(signals, key=signals.get)
+    
+    # Determine quantity based on portfolio constraints
+    if action == "buy":
+        quantity = min(max_position_size, int(portfolio_cash))
+    elif action == "sell":
+        quantity = min(max_position_size, portfolio_stock)
+    else:
+        quantity = 0
+
+    # Confidence is arbitrary in this simple model
+    confidence = 80.0  # Example confidence value
+
+    reasoning = f"Decision based on majority signals: {signals}"
+
+    return PortfolioManagerOutput(
+        action=action,
+        quantity=quantity,
+        confidence=confidence,
+        reasoning=reasoning
+    )
+
 def portfolio_management_agent(state: AgentState):
     """Makes final trading decisions and generates orders"""
-
-    # Create the prompt template
-    template = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """You are a portfolio manager making final trading decisions.
-                Your job is to make a trading decision based on the team's analysis.
-
-                Trading Rules:
-                - Only buy if you have available cash
-                - Only sell if you have shares to sell
-                - Quantity must be ≤ current position for sells
-                - Quantity must be ≤ max_position_size from risk management""",
-            ),
-            (
-                "human",
-                """Based on the team's analysis below, make your trading decision.
-
-                Technical Analysis Trading Signal: {technical_signal}
-                Fundamental Analysis Trading Signal: {fundamentals_signal}
-                Sentiment Analysis Trading Signal: {sentiment_signal}
-                Valuation Analysis Trading Signal: {valuation_signal}
-                News Sentiment Analysis Trading Signal: {news_sentiment_signal}
-                Risk Management Position Limit: {max_position_size}
-                Here is the current portfolio:
-                Portfolio:
-                Cash: {portfolio_cash}
-                Current Position: {portfolio_stock} shares
-                """,
-            ),
-        ]
-    )
 
     # Get the portfolio and analyst signals
     portfolio = state["data"]["portfolio"]
     analyst_signals = state["data"]["analyst_signals"]
 
-    # Generate the prompt
-    prompt = template.invoke(
-        {
-            "technical_signal": analyst_signals.get("technical_analyst_agent", {}).get(
-                "signal", ""
-            ),
-            "fundamentals_signal": analyst_signals.get("fundamentals_agent", {}).get(
-                "signal", ""
-            ),
-            "sentiment_signal": analyst_signals.get("sentiment_agent", {}).get(
-                "signal", ""
-            ),
-            "valuation_signal": analyst_signals.get("valuation_agent", {}).get(
-                "signal", ""
-            ),
-            "news_sentiment_signal": analyst_signals.get("news_sentiment_agent", {}).get("signal", ""),
-            "max_position_size": analyst_signals.get("risk_management_agent", {}).get(
-                "max_position_size", 0
-            ),
-            "portfolio_cash": f"{portfolio['cash']:.2f}",
-            "portfolio_stock": portfolio["stock"],
-        }
+    # Make the trading decision
+    result = make_trading_decision(
+        technical_signal=analyst_signals.get("technical_analyst_agent", {}).get("signal", ""),
+        fundamentals_signal=analyst_signals.get("fundamentals_agent", {}).get("signal", ""),
+        sentiment_signal=analyst_signals.get("sentiment_agent", {}).get("signal", ""),
+        valuation_signal=analyst_signals.get("valuation_agent", {}).get("signal", ""),
+        news_sentiment_signal=analyst_signals.get("news_sentiment_agent", {}).get("signal", ""),
+        max_position_size=analyst_signals.get("risk_management_agent", {}).get("max_position_size", 0),
+        portfolio_cash=portfolio["cash"],
+        portfolio_stock=portfolio["stock"]
     )
-    # Create the LLM
-    llm = ChatOpenAI(model="gpt-4").with_structured_output(
-        PortfolioManagerOutput,
-        method="function_calling",
-    )
-
-    try:
-        # Invoke the LLM
-        result = llm.invoke(prompt)
-    except Exception as e:
-        # Try again with same prompt
-        result = llm.invoke(prompt)
 
     message_content = {
         "action": result.action.lower(),
