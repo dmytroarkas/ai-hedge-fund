@@ -16,7 +16,7 @@ def make_trading_decision(
     sentiment_signal, sentiment_confidence,
     valuation_signal, valuation_confidence,
     news_sentiment_signal, news_sentiment_confidence,
-    reflexivity_signal, reflexivity_confidence,  # Новый параметр
+    reflexivity_signal, reflexivity_confidence,  # Новые параметры
     max_position_size, portfolio_cash, portfolio_stock
 ):
     # Преобразование сигналов в "buy", "sell" или "hold"
@@ -101,6 +101,8 @@ def portfolio_management_agent(state: AgentState):
         valuation_confidence=analyst_signals.get("valuation_agent", {}).get("confidence", 0.0),
         news_sentiment_signal=analyst_signals.get("news_sentiment_agent", {}).get("signal", ""),
         news_sentiment_confidence=analyst_signals.get("news_sentiment_agent", {}).get("confidence", 0.0),
+        reflexivity_signal=analyst_signals.get("reflexivity_agent", {}).get("signal", ""),  # Новый сигнал
+        reflexivity_confidence=analyst_signals.get("reflexivity_agent", {}).get("confidence", 0.0),  # Новый сигнал
         max_position_size=analyst_signals.get("risk_management_agent", {}).get("max_position_size", 0),
         portfolio_cash=portfolio["cash"],
         portfolio_stock=portfolio["stock"]
