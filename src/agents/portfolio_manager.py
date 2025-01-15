@@ -41,6 +41,7 @@ def portfolio_management_agent(state: AgentState):
                 Fundamental Analysis Trading Signal: {fundamentals_signal}
                 Sentiment Analysis Trading Signal: {sentiment_signal}
                 Valuation Analysis Trading Signal: {valuation_signal}
+                News Sentiment Analysis Trading Signal: {news_sentiment_signal}
                 Risk Management Position Limit: {max_position_size}
                 Here is the current portfolio:
                 Portfolio:
@@ -70,6 +71,7 @@ def portfolio_management_agent(state: AgentState):
             "valuation_signal": analyst_signals.get("valuation_agent", {}).get(
                 "signal", ""
             ),
+            "news_sentiment_signal": analyst_signals.get("news_sentiment_agent", {}).get("signal", ""),
             "max_position_size": analyst_signals.get("risk_management_agent", {}).get(
                 "max_position_size", 0
             ),
