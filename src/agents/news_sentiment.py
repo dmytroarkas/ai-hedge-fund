@@ -21,16 +21,18 @@ def news_sentiment_agent(state: AgentState):
     ticker = data["ticker"]
     start_date = data.get("start_date")  # Get start_date from state
     end_date = data["end_date"]
+    show_reasoning = state["metadata"].get("show_reasoning", False)  # Check if reasoning is enabled
 
     # Fetch news articles using GNews API
     news_articles = fetch_news(ticker, start_date, end_date)
 
-    # Log the list of news articles
-    print("\n=== Fetched News ===")
-    for article in news_articles:
-        title = article.get("title", "No title")
-        published_at = article.get("publishedAt", "No date")
-        print(f"Date: {published_at}, Title: {title}")
+    # Log the list of news articles only if show_reasoning is True
+    if show_reasoning:
+        print("\n=== Fetched News ===")
+        for article in news_articles:
+            title = article.get("title", "No title")
+            published_at = article.get("publishedAt", "No date")
+            print(f"Date: {published_at}, Title: {title}")
 
     # Analyze sentiment of news articles
     sentiment_scores = analyze_sentiment(news_articles)
@@ -54,7 +56,7 @@ def news_sentiment_agent(state: AgentState):
     )
 
     # Display reasoning if the flag is set
-    if state["metadata"]["show_reasoning"]:
+    if show_reasoning:
         show_agent_reasoning(message_content, "News Sentiment Analysis Agent")
 
     # Add the signal to the analyst_signals list
@@ -71,21 +73,7 @@ def news_sentiment_agent(state: AgentState):
 
 
 def fetch_news(ticker: str, start_date: str, end_date: str, limit: int = 100):
-    """Fetch news articles related to the ticker using GNews API.
-
-    Args:
-        ticker (str): Stock ticker symbol.
-        start_date (str): Start date for news articles in 'YYYY-MM-DD' format.
-        end_date (str): End date for news articles in 'YYYY-MM-DD' format.
-        limit (int): Maximum number of news articles to fetch.
-
-    Returns:
-        list: List of news articles.
-
-    Raises:
-        ValueError: If the API key is missing or invalid.
-        Exception: If there is an error fetching news from the API.
-    """
+    """Fetch news articles related to the ticker using GNews API."""
     # Check if the API key is set
     if not GNEWS_API_KEY:
         raise ValueError(
