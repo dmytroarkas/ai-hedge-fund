@@ -2,6 +2,7 @@ import json
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 from graph.state import AgentState, show_agent_reasoning
+from langchain_core.messages import HumanMessage  # Добавлен импорт HumanMessage
 
 class PortfolioManagerOutput(BaseModel):
     action: Literal["buy", "sell", "hold"]
