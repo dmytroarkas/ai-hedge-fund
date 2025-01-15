@@ -71,7 +71,28 @@ def news_sentiment_agent(state: AgentState):
 
 
 def fetch_news(ticker: str, start_date: str, end_date: str, limit: int = 100):
-    """Fetch news articles related to the ticker using GNews API."""
+    """Fetch news articles related to the ticker using GNews API.
+
+    Args:
+        ticker (str): Stock ticker symbol.
+        start_date (str): Start date for news articles in 'YYYY-MM-DD' format.
+        end_date (str): End date for news articles in 'YYYY-MM-DD' format.
+        limit (int): Maximum number of news articles to fetch.
+
+    Returns:
+        list: List of news articles.
+
+    Raises:
+        ValueError: If the API key is missing or invalid.
+        Exception: If there is an error fetching news from the API.
+    """
+    # Check if the API key is set
+    if not GNEWS_API_KEY:
+        raise ValueError(
+            "GNEWS_API_KEY is missing. Please ensure it is set in the .env file. "
+            "You can obtain a key from https://gnews.io/."
+        )
+
     # Convert end_date to datetime object
     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
     
@@ -96,13 +117,38 @@ def fetch_news(ticker: str, start_date: str, end_date: str, limit: int = 100):
         "apikey": GNEWS_API_KEY,  # API key
     }
     
-    # Send request to GNews API
-    response = requests.get(GNEWS_API_URL, params=params)
-    if response.status_code == 200:
+    try:
+        # Send request to GNews API
+        response = requests.get(GNEWS_API_URL, params=params)
+        
+        # Check for API errors
+        if response.status_code == 400:
+            raise ValueError(
+                "Invalid API request. This could be due to an invalid API key, "
+                "incorrect date range, or other parameters. Please check your .env file "
+                "and ensure the GNEWS_API_KEY is correct and up-to-date."
+            )
+        elif response.status_code == 401:
+            raise ValueError(
+                "Unauthorized access. The GNEWS_API_KEY is either missing or invalid. "
+                "Please verify your API key at https://gnews.io/ and update the .env file."
+            )
+        elif response.status_code == 403:
+            raise ValueError(
+                "Access forbidden. Your API key may have reached its usage limit or "
+                "is restricted. Check your GNews account for details."
+            )
+        elif response.status_code != 200:
+            raise Exception(
+                f"Error fetching news: {response.status_code}. "
+                f"Response: {response.text}"
+            )
+        
+        # Return the list of articles
         return response.json().get("articles", [])
-    else:
-        print(f"Error fetching news: {response.status_code}")
-        return []
+    
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Failed to connect to GNews API: {e}")
 
 
 def analyze_sentiment(news_articles: list):
