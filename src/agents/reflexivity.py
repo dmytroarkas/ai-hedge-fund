@@ -57,6 +57,7 @@ def reflexivity_agent(state: AgentState):
 
     # Confidence calculation
     confidence = min(abs(price_change) * 100, 100)
+    confidence = round(confidence, 2)  # Округляем до 2 знаков после запятой
 
     # Create the reflexivity message
     message_content = {
