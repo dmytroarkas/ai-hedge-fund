@@ -9,7 +9,6 @@ from agents.technicals import technical_analyst_agent
 from agents.risk_manager import risk_management_agent
 from agents.sentiment import sentiment_agent
 from agents.news_sentiment import news_sentiment_agent  # Импорт нового агента
-from agents.reflexivity import reflexivity_agent  # Импорт нового агента
 from graph.state import AgentState
 from agents.valuation import valuation_agent
 from utils.display import print_trading_output
@@ -91,7 +90,6 @@ def create_workflow(selected_analysts=None):
             "sentiment_analyst", 
             "valuation_analyst",
             "news_sentiment_agent",  # Добавлен новый агент по умолчанию
-            "reflexivity_agent",  # Новый агент
         ]
 
     # Dictionary of all available analysts
@@ -101,7 +99,6 @@ def create_workflow(selected_analysts=None):
         "sentiment_analyst": ("sentiment_agent", sentiment_agent),
         "valuation_analyst": ("valuation_agent", valuation_agent),
         "news_sentiment_agent": ("news_sentiment_agent", news_sentiment_agent),  # Новый агент
-        "reflexivity_agent": ("reflexivity_agent", reflexivity_agent),  # Новый агент
     }
 
     # Add selected analyst nodes
@@ -134,7 +131,6 @@ def select_analysts():
     print("3. Sentiment Analyst")
     print("4. Valuation Analyst")
     print("5. News Sentiment Analyst")  # Новый пункт
-    print("6. Reflexivity Analyst")  # Новый пункт
     choices = input("Input: ").strip().split(",")
     choices = [int(choice.strip()) for choice in choices if choice.strip().isdigit()]
     
@@ -145,9 +141,8 @@ def select_analysts():
         "sentiment_analyst", 
         "valuation_analyst",
         "news_sentiment_agent",  # Новый ключ
-        "reflexivity_agent",  # Новый ключ
     ]
-    selected_analysts = [analyst_keys[choice - 1] for choice in choices if 1 <= choice <= 6]
+    selected_analysts = [analyst_keys[choice - 1] for choice in choices if 1 <= choice <= 5]
     
     if not selected_analysts:
         print("No analysts selected. Using all analysts by default.")
