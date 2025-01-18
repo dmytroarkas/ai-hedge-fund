@@ -10,15 +10,12 @@ class PortfolioManagerOutput(BaseModel):
     confidence: float = Field(description="Confidence in the decision, between 0.0 and 100.0")
     reasoning: str = Field(description="Reasoning for the decision")
 
-def make_trading_decision(
-    technical_signal, technical_confidence,
-    fundamentals_signal, fundamentals_confidence,
-    sentiment_signal, sentiment_confidence,
-    valuation_signal, valuation_confidence,
-    news_sentiment_signal, news_sentiment_confidence,
-    reflexivity_signal, reflexivity_confidence,  # Новые параметры
-    max_position_size, portfolio_cash, portfolio_stock
-):
+def make_trading_decision(technical_signal, technical_confidence,
+                          fundamentals_signal, fundamentals_confidence,
+                          sentiment_signal, sentiment_confidence,
+                          valuation_signal, valuation_confidence,
+                          news_sentiment_signal, news_sentiment_confidence,
+                          max_position_size, portfolio_cash, portfolio_stock):
     # Преобразование сигналов в "buy", "sell" или "hold"
     def convert_signal(signal):
         signal = signal.lower()
@@ -48,7 +45,6 @@ def make_trading_decision(
     process_signal(sentiment_signal, sentiment_confidence)
     process_signal(valuation_signal, valuation_confidence)
     process_signal(news_sentiment_signal, news_sentiment_confidence)
-    process_signal(reflexivity_signal, reflexivity_confidence)  # Новый сигнал
 
     # Определение действия на основе наибольшего веса
     action = max(weighted_signals, key=lambda k: weighted_signals[k]["total_weight"])
@@ -101,8 +97,6 @@ def portfolio_management_agent(state: AgentState):
         valuation_confidence=analyst_signals.get("valuation_agent", {}).get("confidence", 0.0),
         news_sentiment_signal=analyst_signals.get("news_sentiment_agent", {}).get("signal", ""),
         news_sentiment_confidence=analyst_signals.get("news_sentiment_agent", {}).get("confidence", 0.0),
-        reflexivity_signal=analyst_signals.get("reflexivity_agent", {}).get("signal", ""),  # Новый сигнал
-        reflexivity_confidence=analyst_signals.get("reflexivity_agent", {}).get("confidence", 0.0),  # Новый сигнал
         max_position_size=analyst_signals.get("risk_management_agent", {}).get("max_position_size", 0),
         portfolio_cash=portfolio["cash"],
         portfolio_stock=portfolio["stock"]
