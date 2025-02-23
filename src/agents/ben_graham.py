@@ -19,10 +19,11 @@ class BenGrahamSignal(BaseModel):
 
 def ben_graham_agent(state: AgentState):
     """
-    Analyzes stocks using George Soros's theory of reflexivity:
-    1. Focus on the feedback loop between market perceptions and reality.
-    2. Identify potential market imbalances and bubbles.
-    3. Evaluate sentiment and momentum in addition to fundamentals.
+    Analyzes stocks using Benjamin Graham's classic value-investing principles:
+    1. Earnings stability over multiple years.
+    2. Solid financial strength (low debt, adequate liquidity).
+    3. Discount to intrinsic value (e.g. Graham Number or net-net).
+    4. Adequate margin of safety.
     """
     data = state["data"]
     end_date = data["end_date"]
@@ -36,38 +37,24 @@ def ben_graham_agent(state: AgentState):
         metrics = get_financial_metrics(ticker, end_date, period="annual", limit=10)
 
         progress.update_status("ben_graham_agent", ticker, "Gathering financial line items")
-        financial_line_items = search_line_items(
-            ticker,
-            [
-                "revenue",
-                "net_income",
-                "total_assets",
-                "total_liabilities",
-                "current_assets",
-                "current_liabilities",
-                "outstanding_shares",
-            ],
-            end_date,
-            period="annual",
-            limit=10,
-        )
+        financial_line_items = search_line_items(ticker, ["earnings_per_share", "revenue", "net_income", "book_value_per_share", "total_assets", "total_liabilities", "current_assets", "current_liabilities", "dividends_and_other_cash_distributions", "outstanding_shares"], end_date, period="annual", limit=10)
 
         progress.update_status("ben_graham_agent", ticker, "Getting market cap")
         market_cap = get_market_cap(ticker, end_date)
 
-        # Perform sub-analyses based on Soros's reflexivity theory
-        progress.update_status("ben_graham_agent", ticker, "Analyzing market sentiment")
-        sentiment_analysis = analyze_market_sentiment(metrics, financial_line_items)
+        # Perform sub-analyses
+        progress.update_status("ben_graham_agent", ticker, "Analyzing earnings stability")
+        earnings_analysis = analyze_earnings_stability(metrics, financial_line_items)
 
-        progress.update_status("ben_graham_agent", ticker, "Analyzing reflexivity feedback loops")
-        reflexivity_analysis = analyze_reflexivity(metrics, financial_line_items, market_cap)
+        progress.update_status("ben_graham_agent", ticker, "Analyzing financial strength")
+        strength_analysis = analyze_financial_strength(metrics, financial_line_items)
 
-        progress.update_status("ben_graham_agent", ticker, "Evaluating potential market imbalances")
-        imbalance_analysis = evaluate_market_imbalances(metrics, financial_line_items, market_cap)
+        progress.update_status("ben_graham_agent", ticker, "Analyzing Graham valuation")
+        valuation_analysis = analyze_valuation_graham(metrics, financial_line_items, market_cap)
 
         # Aggregate scoring
-        total_score = sentiment_analysis["score"] + reflexivity_analysis["score"] + imbalance_analysis["score"]
-        max_possible_score = 15  # Adjust as needed
+        total_score = earnings_analysis["score"] + strength_analysis["score"] + valuation_analysis["score"]
+        max_possible_score = 15  # total possible from the three analysis functions
 
         # Map total_score to signal
         if total_score >= 0.7 * max_possible_score:
@@ -77,16 +64,9 @@ def ben_graham_agent(state: AgentState):
         else:
             signal = "neutral"
 
-        analysis_data[ticker] = {
-            "signal": signal,
-            "score": total_score,
-            "max_score": max_possible_score,
-            "sentiment_analysis": sentiment_analysis,
-            "reflexivity_analysis": reflexivity_analysis,
-            "imbalance_analysis": imbalance_analysis,
-        }
+        analysis_data[ticker] = {"signal": signal, "score": total_score, "max_score": max_possible_score, "earnings_analysis": earnings_analysis, "strength_analysis": strength_analysis, "valuation_analysis": valuation_analysis}
 
-        progress.update_status("ben_graham_agent", ticker, "Generating Soros-style analysis")
+        progress.update_status("ben_graham_agent", ticker, "Generating Graham-style analysis")
         graham_output = generate_graham_output(
             ticker=ticker,
             analysis_data=analysis_data,
@@ -94,11 +74,7 @@ def ben_graham_agent(state: AgentState):
             model_provider=state["metadata"]["model_provider"],
         )
 
-        graham_analysis[ticker] = {
-            "signal": graham_output.signal,
-            "confidence": graham_output.confidence,
-            "reasoning": graham_output.reasoning,
-        }
+        graham_analysis[ticker] = {"signal": graham_output.signal, "confidence": graham_output.confidence, "reasoning": graham_output.reasoning}
 
         progress.update_status("ben_graham_agent", ticker, "Done")
 
@@ -115,75 +91,187 @@ def ben_graham_agent(state: AgentState):
     return {"messages": [message], "data": state["data"]}
 
 
-def analyze_market_sentiment(metrics: list, financial_line_items: list) -> dict:
+def analyze_earnings_stability(metrics: list, financial_line_items: list) -> dict:
     """
-    Analyze market sentiment and momentum, which are key to Soros's reflexivity theory.
-    """
-    score = 0
-    details = []
-
-    # Example: Use revenue growth as a proxy for sentiment
-    revenues = [item.revenue for item in financial_line_items if item.revenue is not None]
-    if len(revenues) >= 2:
-        growth_rate = (revenues[-1] - revenues[0]) / abs(revenues[0])
-        if growth_rate > 0.2:
-            score += 3
-            details.append(f"Strong revenue growth: {(growth_rate * 100):.1f}%")
-        elif growth_rate > 0.1:
-            score += 2
-            details.append(f"Moderate revenue growth: {(growth_rate * 100):.1f}%")
-        else:
-            details.append(f"Low revenue growth: {(growth_rate * 100):.1f}%")
-    else:
-        details.append("Insufficient revenue data for sentiment analysis")
-
-    return {"score": score, "details": "; ".join(details)}
-
-
-def analyze_reflexivity(metrics: list, financial_line_items: list, market_cap: float) -> dict:
-    """
-    Analyze the feedback loop between market perceptions and reality.
+    Graham wants at least several years of consistently positive earnings (ideally 5+).
+    We'll check:
+    1. Number of years with positive EPS.
+    2. Growth in EPS from first to last period.
     """
     score = 0
     details = []
 
-    # Example: Compare market cap to book value
-    latest = financial_line_items[-1]
-    book_value = latest.total_assets - latest.total_liabilities
-    if book_value > 0 and market_cap > 0:
-        price_to_book = market_cap / book_value
-        if price_to_book < 1.0:
-            score += 3
-            details.append(f"Undervalued: Price-to-Book = {price_to_book:.2f}")
-        elif price_to_book < 2.0:
-            score += 2
-            details.append(f"Fairly valued: Price-to-Book = {price_to_book:.2f}")
-        else:
-            details.append(f"Overvalued: Price-to-Book = {price_to_book:.2f}")
-    else:
-        details.append("Insufficient data for reflexivity analysis")
+    if not metrics or not financial_line_items:
+        return {"score": score, "details": "Insufficient data for earnings stability analysis"}
 
-    return {"score": score, "details": "; ".join(details)}
+    eps_vals = []
+    for item in financial_line_items:
+        if item.earnings_per_share is not None:
+            eps_vals.append(item.earnings_per_share)
 
+    if len(eps_vals) < 2:
+        details.append("Not enough multi-year EPS data.")
+        return {"score": score, "details": "; ".join(details)}
 
-def evaluate_market_imbalances(metrics: list, financial_line_items: list, market_cap: float) -> dict:
-    """
-    Evaluate potential market imbalances or bubbles.
-    """
-    score = 0
-    details = []
-
-    # Example: Check for excessive leverage
-    latest = financial_line_items[-1]
-    debt_to_equity = latest.total_liabilities / (latest.total_assets - latest.total_liabilities)
-    if debt_to_equity > 1.0:
+    # 1. Consistently positive EPS
+    positive_eps_years = sum(1 for e in eps_vals if e > 0)
+    total_eps_years = len(eps_vals)
+    if positive_eps_years == total_eps_years:
         score += 3
-        details.append(f"High leverage: Debt-to-Equity = {debt_to_equity:.2f}")
-    elif debt_to_equity > 0.5:
+        details.append("EPS was positive in all available periods.")
+    elif positive_eps_years >= (total_eps_years * 0.8):
         score += 2
-        details.append(f"Moderate leverage: Debt-to-Equity = {debt_to_equity:.2f}")
+        details.append("EPS was positive in most periods.")
     else:
-        details.append(f"Low leverage: Debt-to-Equity = {debt_to_equity:.2f}")
+        details.append("EPS was negative in multiple periods.")
+
+    # 2. EPS growth from earliest to latest
+    if eps_vals[-1] > eps_vals[0]:
+        score += 1
+        details.append("EPS grew from earliest to latest period.")
+    else:
+        details.append("EPS did not grow from earliest to latest period.")
+
+    return {"score": score, "details": "; ".join(details)}
+
+
+def analyze_financial_strength(metrics: list, financial_line_items: list) -> dict:
+    """
+    Graham checks liquidity (current ratio >= 2), manageable debt,
+    and dividend record (preferably some history of dividends).
+    """
+    score = 0
+    details = []
+
+    if not financial_line_items:
+        return {"score": score, "details": "No data for financial strength analysis"}
+
+    latest_item = financial_line_items[-1]
+    total_assets = latest_item.total_assets or 0
+    total_liabilities = latest_item.total_liabilities or 0
+    current_assets = latest_item.current_assets or 0
+    current_liabilities = latest_item.current_liabilities or 0
+
+    # 1. Current ratio
+    if current_liabilities > 0:
+        current_ratio = current_assets / current_liabilities
+        if current_ratio >= 2.0:
+            score += 2
+            details.append(f"Current ratio = {current_ratio:.2f} (>=2.0: solid).")
+        elif current_ratio >= 1.5:
+            score += 1
+            details.append(f"Current ratio = {current_ratio:.2f} (moderately strong).")
+        else:
+            details.append(f"Current ratio = {current_ratio:.2f} (<1.5: weaker liquidity).")
+    else:
+        details.append("Cannot compute current ratio (missing or zero current_liabilities).")
+
+    # 2. Debt vs. Assets
+    if total_assets > 0:
+        debt_ratio = total_liabilities / total_assets
+        if debt_ratio < 0.5:
+            score += 2
+            details.append(f"Debt ratio = {debt_ratio:.2f}, under 0.50 (conservative).")
+        elif debt_ratio < 0.8:
+            score += 1
+            details.append(f"Debt ratio = {debt_ratio:.2f}, somewhat high but could be acceptable.")
+        else:
+            details.append(f"Debt ratio = {debt_ratio:.2f}, quite high by Graham standards.")
+    else:
+        details.append("Cannot compute debt ratio (missing total_assets).")
+
+    # 3. Dividend track record
+    div_periods = [item.dividends_and_other_cash_distributions for item in financial_line_items if item.dividends_and_other_cash_distributions is not None]
+    if div_periods:
+        # In many data feeds, dividend outflow is shown as a negative number
+        # (money going out to shareholders). We'll consider any negative as 'paid a dividend'.
+        div_paid_years = sum(1 for d in div_periods if d < 0)
+        if div_paid_years > 0:
+            # e.g. if at least half the periods had dividends
+            if div_paid_years >= (len(div_periods) // 2 + 1):
+                score += 1
+                details.append("Company paid dividends in the majority of the reported years.")
+            else:
+                details.append("Company has some dividend payments, but not most years.")
+        else:
+            details.append("Company did not pay dividends in these periods.")
+    else:
+        details.append("No dividend data available to assess payout consistency.")
+
+    return {"score": score, "details": "; ".join(details)}
+
+
+def analyze_valuation_graham(metrics: list, financial_line_items: list, market_cap: float) -> dict:
+    """
+    Core Graham approach to valuation:
+    1. Net-Net Check: (Current Assets - Total Liabilities) vs. Market Cap
+    2. Graham Number: sqrt(22.5 * EPS * Book Value per Share)
+    3. Compare per-share price to Graham Number => margin of safety
+    """
+    if not financial_line_items or not market_cap or market_cap <= 0:
+        return {"score": 0, "details": "Insufficient data to perform valuation"}
+
+    latest = financial_line_items[-1]
+    current_assets = latest.current_assets or 0
+    total_liabilities = latest.total_liabilities or 0
+    book_value_ps = latest.book_value_per_share or 0
+    eps = latest.earnings_per_share or 0
+    shares_outstanding = latest.outstanding_shares or 0
+
+    details = []
+    score = 0
+
+    # 1. Net-Net Check
+    #   NCAV = Current Assets - Total Liabilities
+    #   If NCAV > Market Cap => historically a strong buy signal
+    net_current_asset_value = current_assets - total_liabilities
+    if net_current_asset_value > 0 and shares_outstanding > 0:
+        net_current_asset_value_per_share = net_current_asset_value / shares_outstanding
+        price_per_share = market_cap / shares_outstanding if shares_outstanding else 0
+
+        details.append(f"Net Current Asset Value = {net_current_asset_value:,.2f}")
+        details.append(f"NCAV Per Share = {net_current_asset_value_per_share:,.2f}")
+        details.append(f"Price Per Share = {price_per_share:,.2f}")
+
+        if net_current_asset_value > market_cap:
+            score += 4  # Very strong Graham signal
+            details.append("Net-Net: NCAV > Market Cap (classic Graham deep value).")
+        else:
+            # For partial net-net discount
+            if net_current_asset_value_per_share >= (price_per_share * 0.67):
+                score += 2
+                details.append("NCAV Per Share >= 2/3 of Price Per Share (moderate net-net discount).")
+    else:
+        details.append("NCAV not exceeding market cap or insufficient data for net-net approach.")
+
+    # 2. Graham Number
+    #   GrahamNumber = sqrt(22.5 * EPS * BVPS).
+    #   Compare the result to the current price_per_share
+    #   If GrahamNumber >> price, indicates undervaluation
+    graham_number = None
+    if eps > 0 and book_value_ps > 0:
+        graham_number = math.sqrt(22.5 * eps * book_value_ps)
+        details.append(f"Graham Number = {graham_number:.2f}")
+    else:
+        details.append("Unable to compute Graham Number (EPS or Book Value missing/<=0).")
+
+    # 3. Margin of Safety relative to Graham Number
+    if graham_number and shares_outstanding > 0:
+        current_price = market_cap / shares_outstanding
+        if current_price > 0:
+            margin_of_safety = (graham_number - current_price) / current_price
+            details.append(f"Margin of Safety (Graham Number) = {margin_of_safety:.2%}")
+            if margin_of_safety > 0.5:
+                score += 3
+                details.append("Price is well below Graham Number (>=50% margin).")
+            elif margin_of_safety > 0.2:
+                score += 1
+                details.append("Some margin of safety relative to Graham Number.")
+            else:
+                details.append("Price close to or above Graham Number, low margin of safety.")
+        else:
+            details.append("Current price is zero or invalid; can't compute margin of safety.")
+    # else: already appended details for missing graham_number
 
     return {"score": score, "details": "; ".join(details)}
 
@@ -195,27 +283,27 @@ def generate_graham_output(
     model_provider: str,
 ) -> BenGrahamSignal:
     """
-    Generates an investment decision in the style of George Soros.
+    Generates an investment decision in the style of Benjamin Graham:
+    - Value emphasis, margin of safety, net-nets, conservative balance sheet, stable earnings.
+    - Return the result in a JSON structure: { signal, confidence, reasoning }.
     """
+
     template = ChatPromptTemplate.from_messages([
         (
             "system",
-            """You are a George Soros AI agent, making investment decisions using his principles:
-            1. Focus on the feedback loop between market perceptions and reality.
-            2. Identify potential market imbalances and bubbles.
-            3. Evaluate sentiment and momentum in addition to fundamentals.
-            4. Be prepared to act quickly when market conditions change.
-            5. Avoid over-reliance on traditional valuation metrics.
-
-            Rules:
-            - Look for signs of reflexivity in market behavior.
-            - Identify overvalued or undervalued assets based on market sentiment.
-            - Consider macroeconomic factors and market psychology.
-            - Provide a rational, data-driven recommendation (bullish, bearish, or neutral)."""
+            """You are a Benjamin Graham AI agent, making investment decisions using his principles:
+            1. Insist on a margin of safety by buying below intrinsic value (e.g., using Graham Number, net-net).
+            2. Emphasize the company's financial strength (low leverage, ample current assets).
+            3. Prefer stable earnings over multiple years.
+            4. Consider dividend record for extra safety.
+            5. Avoid speculative or high-growth assumptions; focus on proven metrics.
+                        
+            Return a rational recommendation: bullish, bearish, or neutral, with a confidence level (0-100) and concise reasoning.
+            """
         ),
         (
             "human",
-            """Based on the following analysis, create a Soros-style investment signal.
+            """Based on the following analysis, create a Graham-style investment signal:
 
             Analysis Data for {ticker}:
             {analysis_data}
@@ -225,7 +313,8 @@ def generate_graham_output(
               "signal": "bullish" or "bearish" or "neutral",
               "confidence": float (0-100),
               "reasoning": "string"
-            }}"""
+            }}
+            """
         )
     ])
 
